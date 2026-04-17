@@ -1,6 +1,6 @@
 /*
 obs-av-sync — Automatic multi-camera AV sync for OBS Studio
-Copyright (C) 2026 Sean Mahoney <seanm@ctera.com>
+Copyright (C) 2026 Sean Mahoney <sean@mahoney.xyz>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,11 +19,14 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <obs-module.h>
 #include <plugin-support.h>
 
+#include "av_sync_filter.h"
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 bool obs_module_load(void)
 {
+	av_sync_register_filter();
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;
 }
