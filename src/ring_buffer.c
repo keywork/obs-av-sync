@@ -108,15 +108,14 @@ void av_sync_ring_get_stats(const av_sync_ring_t *r, av_sync_ring_stats_t *out)
 	if (!r || !out) {
 		return;
 	}
-	out->capacity = r->capacity;
-	out->total_written = r->total_written;
-	out->filled = (r->total_written < r->capacity) ? (size_t)r->total_written : r->capacity;
-	out->sample_rate = r->sample_rate;
+	/* Stats path: relaxed load is acceptable — stats are informational, not used for
+	   ring-position decisions. The consumer's ring-read path uses acquire ordering. */
+	size_t tw = atomic_load_explicit(&r->total_written, memory_order_relaxed);
+
+	out->capacity            = r->capacity;
+	out->total_written       = (uint64_t)tw;
+	out->filled              = (tw < r->capacity) ? tw : r->capacity;
+	out->sample_rate         = r->sample_rate;
 	out->newest_timestamp_ns = r->newest_timestamp_ns;
-	if (out->filled > 0) {
-		uint64_t span_ns = (uint64_t)(((double)(out->filled - 1) * 1.0e9) / (double)r->sample_rate);
-		out->oldest_timestamp_ns = (out->newest_timestamp_ns > span_ns) ? out->newest_timestamp_ns - span_ns : 0;
-	} else {
-		out->oldest_timestamp_ns = 0;
-	}
+	out->oldest_timestamp_ns = r->oldest_timestamp_ns;
 }
