@@ -128,3 +128,47 @@ void av_sync_ring_cursor_init(av_sync_ring_t *ring, av_sync_ring_cursor_t *curso
 	size_t tw = atomic_load_explicit(&ring->total_written, memory_order_acquire);
 	cursor->pos = (tw >= ring->capacity) ? (tw - ring->capacity) : 0;
 }
+
+size_t av_sync_ring_read(av_sync_ring_t *ring, av_sync_ring_cursor_t *cursor,
+                          float *out, size_t n)
+{
+	if (!ring || !cursor || !out || n == 0) {
+		return 0;
+	}
+
+	/* Acquire-load: establishes happens-before with the producer's release-store,
+	   guaranteeing all sample bytes written before that store are now visible. */
+	size_t tw = atomic_load_explicit(&ring->total_written, memory_order_acquire);
+
+	/* Compute the oldest valid absolute index. */
+	size_t oldest = (tw >= ring->capacity) ? (tw - ring->capacity) : 0;
+
+	/* Lapped-cursor recovery: advance past samples that have been overwritten. */
+	if (cursor->pos < oldest) {
+		cursor->pos = oldest;
+	}
+
+	/* Samples available from cursor to write head. */
+	size_t available = tw - cursor->pos;
+	size_t to_copy   = (available < n) ? available : n;
+
+	if (to_copy == 0) {
+		return 0;
+	}
+
+	/* Wrap-around copy. */
+	size_t read_pos = cursor->pos % ring->capacity;
+
+	if (read_pos + to_copy <= ring->capacity) {
+		/* Contiguous — single copy. */
+		memcpy(out, ring->samples + read_pos, to_copy * sizeof(float));
+	} else {
+		/* Wraps around end of ring — two copies. */
+		size_t first_chunk = ring->capacity - read_pos;
+		memcpy(out,               ring->samples + read_pos, first_chunk * sizeof(float));
+		memcpy(out + first_chunk, ring->samples,            (to_copy - first_chunk) * sizeof(float));
+	}
+
+	cursor->pos += to_copy;
+	return to_copy;
+}
