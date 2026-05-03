@@ -20,10 +20,8 @@
 
 #include "gcc_phat.h"
 
-static void generate_sine(float *buf, size_t n, float freq, uint32_t fs)
+static void generate_noise(float *buf, size_t n)
 {
-	(void)freq;
-	(void)fs;
 	/* Band-limited pink noise for robust GCC-PHAT peaks.
 	   Pink noise has energy at all frequencies, giving a clean
 	   delta-like correlation peak. */
@@ -95,7 +93,7 @@ int main(void)
 			std::vector<float> tgt(96000);
 			std::vector<float> delayed(96000);
 
-			generate_sine(ref.data(), ref.size(), 1000.0f, 48000);
+			generate_noise(ref.data(), ref.size());
 			std::memcpy(tgt.data(), ref.data(),
 			            tgt.size() * sizeof(float));
 			add_gaussian_noise(tgt.data(), tgt.size(), snr_db);
