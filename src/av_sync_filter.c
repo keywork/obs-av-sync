@@ -89,6 +89,7 @@ static void av_sync_filter_destroy(void *data_ptr)
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unknown)";
 	obs_log(LOG_INFO, "filter destroyed on '%s'", parent_name);
 	av_sync_ring_destroy(data->ring);
+	bfree(data->downmix_scratch);
 	bfree(data);
 }
 
