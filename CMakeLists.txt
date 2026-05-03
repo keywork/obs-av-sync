@@ -34,6 +34,12 @@ if(ENABLE_QT)
   )
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/av_sync_filter.c)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/av_sync_filter.c src/ring_buffer.c)
+
+# Require C11 for <stdatomic.h> — MSVC needs /std:c11 or /std:c17 explicitly.
+# obs-plugintemplate's compilerconfig sets C_STANDARD 17 globally; this is a
+# belt-and-suspenders guard in case that changes or is absent.
+set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD 11)
+set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD_REQUIRED ON)
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
