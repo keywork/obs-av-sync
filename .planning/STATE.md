@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Milestone:** 1 — Hands-Off AV Sync
 **Phase:** 3 of 8 (RT-Thread Safety & Ring Hardening)
-**Last updated:** 2026-05-03 after Plan 4 completion (Phase 3 complete)
+**Last updated:** 2026-05-03 after code review fixes (Phase 3 fully complete)
 
 ## Phase Completion
 
@@ -29,3 +29,9 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 ## Open Items
 
 - Phase 4 Plan 1: Vendor PFFFT — add as FetchContent or git submodule
+
+## Phase 3 Post-Execution Notes
+
+- Code review (`03-REVIEW.md`) found 7 issues (1 critical, 3 warnings, 3 info).
+- All 7 issues fixed in 3 commits (`7e90739`, `9080ef9`, `4549114`).
+- Fix log: `.planning/phases/03-rt-thread-safety-ring-hardening/03-REVIEW-FIX.md`
