@@ -11,6 +11,7 @@ the Free Software Foundation; either version 2 of the License, or
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,12 +24,19 @@ bool reference_tap_init(void);
 void reference_tap_shutdown(void);
 
 /* Change the designated reference source. Pass NULL or "" to detach.
-   Thread-safe; may be called from the UI thread. */
-void reference_tap_set_source(const char *name);
+   Thread-safe; may be called from the UI thread.
+   @param requester Optional name of the filter/source requesting the change,
+          logged when the global reference is overridden. */
+void reference_tap_set_source(const char *name, const char *requester);
 
 /* Return the shared reference ring, or NULL if no source is attached.
-   The caller (analysis thread) must NOT free the ring. */
-av_sync_ring_t *reference_tap_get_ring(void);
+   The pointer is valid for the lifetime of the plugin module. Callers
+   must NOT hold it across reference_tap_shutdown() and must NOT free it. */
+const av_sync_ring_t *reference_tap_get_ring(void);
+
+/* Return the number of oversized audio chunks dropped by the reference
+   callback since init. */
+uint64_t reference_tap_get_oversize_skips(void);
 
 #ifdef __cplusplus
 }

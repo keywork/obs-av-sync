@@ -99,18 +99,6 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	/* Apply initial settings (reference source name, enable state). */
 	av_sync_filter_update(data, settings);
 
-	/* Startup validation: if a reference was saved but the source is gone, warn per-filter. */
-	if (data->reference_source_name && data->reference_source_name[0] != '\0') {
-		obs_source_t *ref = obs_get_source_by_name(data->reference_source_name);
-		if (!ref) {
-			obs_log(LOG_WARNING,
-			        "filter on '%s': saved reference source '%s' is missing; offset held",
-			        parent_name, data->reference_source_name);
-		} else {
-			obs_source_release(ref);
-		}
-	}
-
 	return data;
 }
 
@@ -169,6 +157,9 @@ static void av_sync_filter_update(void *data_ptr, obs_data_t *settings)
 {
 	struct av_sync_filter_data *data = data_ptr;
 
+	obs_source_t *parent = data->source ? obs_filter_get_parent(data->source) : NULL;
+	const char *parent_name = parent ? obs_source_get_name(parent) : "(unattached)";
+
 	const char *new_ref = obs_data_get_string(settings, "reference_source_name");
 	bool new_enabled = obs_data_get_bool(settings, "sync_enabled");
 
@@ -193,7 +184,7 @@ static void av_sync_filter_update(void *data_ptr, obs_data_t *settings)
 	}
 
 	if (changed) {
-		reference_tap_set_source(data->reference_source_name);
+		reference_tap_set_source(data->reference_source_name, parent_name);
 		obs_log(LOG_INFO, "reference source changed to '%s' (enabled=%s)",
 		        data->reference_source_name ? data->reference_source_name : "(none)",
 		        data->sync_enabled ? "true" : "false");

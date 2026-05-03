@@ -23,6 +23,8 @@ static av_sync_ring_t *ref_ring;
 static uint32_t        ref_sample_rate;
 static float          *ref_downmix_scratch;
 static size_t          ref_downmix_capacity;
+static bool            ref_initialized;
+static _Atomic uint64_t ref_oversize_skips;
 
 static void reference_audio_callback(void *param, obs_source_t *source,
                                       const struct audio_data *audio, bool muted)
@@ -35,6 +37,7 @@ static void reference_audio_callback(void *param, obs_source_t *source,
 	}
 
 	if (audio->frames > ref_downmix_capacity) {
+		ref_oversize_skips++;
 		return;
 	}
 
@@ -61,7 +64,10 @@ static void reference_audio_callback(void *param, obs_source_t *source,
 
 bool reference_tap_init(void)
 {
-	pthread_mutex_init(&ref_mutex, NULL);
+	if (pthread_mutex_init(&ref_mutex, NULL) != 0) {
+		return false;
+	}
+	ref_initialized = true;
 
 	struct obs_audio_info oai;
 	ref_sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
@@ -70,19 +76,37 @@ bool reference_tap_init(void)
 	ref_downmix_capacity = (size_t)ref_sample_rate;
 	ref_downmix_scratch  = bzalloc(ref_downmix_capacity * sizeof(float));
 
+	if (!ref_ring || !ref_downmix_scratch) {
+		if (ref_ring) {
+			av_sync_ring_destroy(ref_ring);
+			ref_ring = NULL;
+		}
+		bfree(ref_downmix_scratch);
+		ref_downmix_scratch = NULL;
+		pthread_mutex_unlock(&ref_mutex);
+		pthread_mutex_destroy(&ref_mutex);
+		ref_initialized = false;
+		return false;
+	}
+
 	ref_name[0] = '\0';
 	ref_source  = NULL;
+	ref_oversize_skips = 0;
 
 	return true;
 }
 
 void reference_tap_shutdown(void)
 {
-	/* Defensive: if init never ran, nothing to clean up. */
-	if (!ref_ring && !ref_downmix_scratch) {
+	if (!ref_initialized) {
 		return;
 	}
 	pthread_mutex_lock(&ref_mutex);
+
+	if (!ref_ring && !ref_downmix_scratch) {
+		pthread_mutex_unlock(&ref_mutex);
+		return;
+	}
 
 	if (ref_source) {
 		obs_source_remove_audio_capture_callback(ref_source, reference_audio_callback, NULL);
@@ -98,9 +122,10 @@ void reference_tap_shutdown(void)
 
 	pthread_mutex_unlock(&ref_mutex);
 	pthread_mutex_destroy(&ref_mutex);
+	ref_initialized = false;
 }
 
-void reference_tap_set_source(const char *name)
+void reference_tap_set_source(const char *name, const char *requester)
 {
 	pthread_mutex_lock(&ref_mutex);
 
@@ -133,16 +158,23 @@ void reference_tap_set_source(const char *name)
 		} else {
 			obs_source_add_audio_capture_callback(new_source, reference_audio_callback, NULL);
 			ref_source = new_source;
+			if (requester && requester[0] != '\0') {
+				obs_log(LOG_INFO,
+					"reference source changed to '%s' by filter on '%s'",
+					name, requester);
+			}
 		}
 	}
 
 	pthread_mutex_unlock(&ref_mutex);
 }
 
-av_sync_ring_t *reference_tap_get_ring(void)
+const av_sync_ring_t *reference_tap_get_ring(void)
 {
-	pthread_mutex_lock(&ref_mutex);
-	av_sync_ring_t *ring = ref_ring;
-	pthread_mutex_unlock(&ref_mutex);
-	return ring;
+	return ref_ring;
+}
+
+uint64_t reference_tap_get_oversize_skips(void)
+{
+	return ref_oversize_skips;
 }
