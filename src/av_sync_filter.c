@@ -24,6 +24,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include "av_sync_filter.h"
 #include "ring_buffer.h"
+#include "reference_tap.h"
 
 #define AV_SYNC_FILTER_ID "obs_av_sync_filter"
 
@@ -50,12 +51,18 @@ struct av_sync_filter_data {
 	uint64_t window_max_gap_ns;
 	uint32_t sample_rate;
 
+	/* Per-filter configuration (Phase 5). */
+	char  *reference_source_name;   /* bstrdup'd name of the chosen reference source; NULL if none */
+	bool   sync_enabled;            /* true = analysis thread may apply offsets */
+
 	/* Ring buffer (Phase 3): per-filter mono tap, allocated at filter create. */
 	av_sync_ring_t *ring;
 	float          *downmix_scratch;   /* heap-allocated downmix buffer, sized sample_rate * AV_SYNC_MAX_CHUNK_S */
 	size_t          downmix_capacity;  /* number of floats in downmix_scratch */
 	uint64_t        oversize_skips;    /* chunks skipped because they exceeded the downmix scratch */
 };
+
+static void av_sync_filter_update(void *data_ptr, obs_data_t *settings);
 
 static const char *av_sync_filter_get_name(void *type_data)
 {
@@ -75,6 +82,8 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	struct obs_audio_info oai;
 	uint32_t sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
 	data->sample_rate      = sample_rate;
+	data->reference_source_name = NULL;
+	data->sync_enabled = true;
 	data->downmix_capacity = (size_t)sample_rate * AV_SYNC_MAX_CHUNK_S;
 	data->downmix_scratch  = bzalloc(data->downmix_capacity * sizeof(float));
 	data->ring             = av_sync_ring_create((size_t)sample_rate * AV_SYNC_RING_SECONDS, sample_rate);
@@ -82,6 +91,20 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	   research doc's example and is intentional. */
 
 	obs_log(LOG_INFO, "filter created on '%s' rate=%u", parent_name, sample_rate);
+
+	const char *saved_ref = obs_data_get_string(settings, "reference_source_name");
+	if (saved_ref && saved_ref[0] != '\0') {
+		obs_source_t *ref = obs_get_source_by_name(saved_ref);
+		if (ref) {
+			reference_tap_set_source(saved_ref);
+			obs_source_release(ref);
+		} else {
+			obs_log(LOG_WARNING, "saved reference source '%s' not found at startup", saved_ref);
+		}
+	}
+
+	/* Apply initial settings (reference source name, enable state). */
+	av_sync_filter_update(data, settings);
 
 	return data;
 }
@@ -94,7 +117,78 @@ static void av_sync_filter_destroy(void *data_ptr)
 	obs_log(LOG_INFO, "filter destroyed on '%s'", parent_name);
 	av_sync_ring_destroy(data->ring);
 	bfree(data->downmix_scratch);
+	bfree(data->reference_source_name);
 	bfree(data);
+}
+
+static bool add_source_to_list(void *param, obs_source_t *source)
+{
+	obs_property_t *p = (obs_property_t *)param;
+	if (obs_source_get_output_flags(source) & OBS_SOURCE_AUDIO) {
+		const char *name = obs_source_get_name(source);
+		if (name && name[0] != '\0') {
+			obs_property_list_add_string(p, name, name);
+		}
+	}
+	return true;
+}
+
+static obs_properties_t *av_sync_filter_get_properties(void *data_ptr)
+{
+	UNUSED_PARAMETER(data_ptr);
+	obs_properties_t *props = obs_properties_create();
+
+	obs_property_t *list = obs_properties_add_list(
+		props,
+		"reference_source_name",
+		obs_module_text("ReferenceSource"),
+		OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_STRING);
+
+	obs_property_list_add_string(list, obs_module_text("ReferenceSource.None"), "");
+	obs_enum_sources(add_source_to_list, list);
+
+	obs_properties_add_bool(
+		props,
+		"sync_enabled",
+		obs_module_text("EnableSyncTracking"));
+
+	return props;
+}
+
+static void av_sync_filter_update(void *data_ptr, obs_data_t *settings)
+{
+	struct av_sync_filter_data *data = data_ptr;
+
+	const char *new_ref = obs_data_get_string(settings, "reference_source_name");
+	bool new_enabled = obs_data_get_bool(settings, "sync_enabled");
+
+	/* Update sync_enabled (always safe, no locking needed). */
+	data->sync_enabled = new_enabled;
+
+	/* Update reference source if it changed. */
+	bool changed = false;
+	if (new_ref && new_ref[0] != '\0') {
+		if (!data->reference_source_name ||
+		    strcmp(data->reference_source_name, new_ref) != 0) {
+			bfree(data->reference_source_name);
+			data->reference_source_name = bstrdup(new_ref);
+			changed = true;
+		}
+	} else {
+		if (data->reference_source_name) {
+			bfree(data->reference_source_name);
+			data->reference_source_name = NULL;
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		reference_tap_set_source(data->reference_source_name);
+		obs_log(LOG_INFO, "reference source changed to '%s' (enabled=%s)",
+		        data->reference_source_name ? data->reference_source_name : "(none)",
+		        data->sync_enabled ? "true" : "false");
+	}
 }
 
 static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_audio_data *audio)
@@ -188,6 +282,8 @@ static struct obs_source_info av_sync_filter_info = {
 	.get_name = av_sync_filter_get_name,
 	.create = av_sync_filter_create,
 	.destroy = av_sync_filter_destroy,
+	.update = av_sync_filter_update,
+	.get_properties = av_sync_filter_get_properties,
 	.filter_audio = av_sync_filter_audio,
 };
 

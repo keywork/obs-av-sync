@@ -20,6 +20,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <plugin-support.h>
 
 #include "av_sync_filter.h"
+#include "reference_tap.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -27,11 +28,16 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 bool obs_module_load(void)
 {
 	av_sync_register_filter();
+	if (!reference_tap_init()) {
+		obs_log(LOG_ERROR, "reference tap init failed");
+		return false;
+	}
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;
 }
 
 void obs_module_unload(void)
 {
+	reference_tap_shutdown();
 	obs_log(LOG_INFO, "plugin unloaded");
 }

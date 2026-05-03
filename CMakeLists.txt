@@ -4,7 +4,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCO
 
 project(${_name} VERSION ${_version})
 
-option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
+option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" ON)
 option(ENABLE_QT "Use Qt functionality" OFF)
 
 include(compilerconfig)
@@ -61,7 +61,7 @@ if(ENABLE_QT)
   )
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/av_sync_filter.c src/ring_buffer.c src/gcc_phat.cpp)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/av_sync_filter.c src/ring_buffer.c src/reference_tap.c src/gcc_phat.cpp)
 
 # Require C11 for <stdatomic.h> — MSVC needs /std:c11 or /std:c17 explicitly.
 # obs-plugintemplate's compilerconfig sets C_STANDARD 17 globally; this is a
