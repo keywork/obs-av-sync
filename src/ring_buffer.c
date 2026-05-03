@@ -119,3 +119,12 @@ void av_sync_ring_get_stats(const av_sync_ring_t *r, av_sync_ring_stats_t *out)
 	out->newest_timestamp_ns = r->newest_timestamp_ns;
 	out->oldest_timestamp_ns = r->oldest_timestamp_ns;
 }
+
+void av_sync_ring_cursor_init(av_sync_ring_t *ring, av_sync_ring_cursor_t *cursor)
+{
+	if (!ring || !cursor) {
+		return;
+	}
+	size_t tw = atomic_load_explicit(&ring->total_written, memory_order_acquire);
+	cursor->pos = (tw >= ring->capacity) ? (tw - ring->capacity) : 0;
+}
