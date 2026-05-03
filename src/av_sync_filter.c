@@ -67,7 +67,17 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 
 	obs_source_t *parent = obs_filter_get_parent(source);
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unattached)";
-	obs_log(LOG_INFO, "filter created on '%s'", parent_name);
+
+	struct obs_audio_info oai;
+	uint32_t sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
+	data->sample_rate      = sample_rate;
+	data->downmix_capacity = (size_t)sample_rate * AV_SYNC_MAX_CHUNK_S;
+	data->downmix_scratch  = bzalloc(data->downmix_capacity * sizeof(float));
+	data->ring             = av_sync_ring_create((size_t)sample_rate * AV_SYNC_RING_SECONDS, sample_rate);
+	/* Note: capacity is computed first and then used in bzalloc — this is equivalent to the
+	   research doc's example and is intentional. */
+
+	obs_log(LOG_INFO, "filter created on '%s' rate=%u", parent_name, sample_rate);
 
 	return data;
 }
