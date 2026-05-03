@@ -18,6 +18,7 @@
 !CLAUDE.md
 !/docs
 !/.planning
+!/tests
 
 # Exclude lock files
 *.lock.json
