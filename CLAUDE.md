@@ -53,3 +53,35 @@ Format checks: `build-aux/run-clang-format` and `build-aux/run-gersemi` enforce 
 - OBS plugin API: https://docs.obsproject.com/
 - Plugin template wiki: https://github.com/obsproject/obs-plugintemplate/wiki
 - GCC-PHAT reference: Knapp & Carter 1976, "The Generalized Correlation Method for Estimation of Time Delay"
+
+## GSD Workflow
+
+This project uses [GSD (Get Shit Done)](https://github.com/rascal999/gsd) for structured planning and execution.
+
+### Planning artifacts
+
+- `.planning/PROJECT.md` — project context, requirements, key decisions
+- `.planning/REQUIREMENTS.md` — v1 requirements with REQ-IDs
+- `.planning/ROADMAP.md` — phased execution roadmap
+- `.planning/STATE.md` — current project state and phase progress
+- `.planning/config.json` — workflow preferences
+- `.planning/codebase/` — codebase map (7 structured documents)
+
+### Current status
+
+Milestone 1: Hands-Off AV Sync — Phase 3 is next (RT-Thread Safety & Ring Hardening).
+
+Phases 1–2 are complete (plugin skeleton, ring buffer). The critical next step is fixing the heap allocation inside the audio callback before any DSP work begins.
+
+### Commands
+
+```sh
+# Check project progress
+/gsd-progress
+
+# Discuss and plan the next phase
+/gsd-discuss-phase 3
+
+# Plan directly (skip discussion)
+/gsd-plan-phase 3
+```
