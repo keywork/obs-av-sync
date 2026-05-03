@@ -42,4 +42,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/av_sync_filte
 set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD 11)
 set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD_REQUIRED ON)
 
+# MSVC does not enable C11 atomics under its default C mode.
+# /std:c17 plus /experimental:c11atomics are required on MSVC 19.50.
+if(MSVC)
+  set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD 17)
+  target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /experimental:c11atomics)
+endif()
+
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
