@@ -82,9 +82,9 @@ static void av_sync_filter_destroy(void *data_ptr)
 	bfree(data);
 }
 
-/* Local downmix scratch size. OBS audio chunks are ~10 ms (~480 frames at 48 kHz).
-   2048 is ample headroom; larger chunks fall back to skipping the ring write for that callback. */
-#define AV_SYNC_DOWNMIX_SCRATCH 2048
+/* Maximum audio chunk size supported for downmix (1 second = 48000 samples at 48 kHz).
+   Heap-allocated at filter create. Chunks larger than this are skipped with a warning. */
+#define AV_SYNC_MAX_CHUNK_S 1
 
 static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_audio_data *audio)
 {
