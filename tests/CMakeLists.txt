@@ -38,3 +38,20 @@ if(ENABLE_TSAN AND NOT WIN32)
 endif()
 
 add_test(NAME spsc_round_trip COMMAND test_ring_spsc)
+
+# ── GCC-PHAT synthetic signal tests ──────────────────────────────────────────
+add_executable(test_gcc_phat
+    test_gcc_phat.cpp
+    ${CMAKE_SOURCE_DIR}/src/gcc_phat.cpp
+)
+
+target_include_directories(test_gcc_phat PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_gcc_phat PRIVATE PFFFT)
+
+set_property(TARGET test_gcc_phat PROPERTY CXX_STANDARD 17)
+set_property(TARGET test_gcc_phat PROPERTY CXX_STANDARD_REQUIRED ON)
+
+add_test(NAME gcc_phat_synthetic COMMAND test_gcc_phat)

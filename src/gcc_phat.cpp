@@ -79,15 +79,15 @@ gcc_phat_result_t estimate_offset(const float *ref, const float *target,
 		tgt_complex[2 * i + 1] = 0.0f;
 	}
 
-	pffft_transform(setup, ref_complex, ref_spec, work, PFFFT_FORWARD);
-	pffft_transform(setup, tgt_complex, tgt_spec, work, PFFFT_FORWARD);
+	pffft_transform_ordered(setup, ref_complex, ref_spec, work, PFFFT_FORWARD);
+	pffft_transform_ordered(setup, tgt_complex, tgt_spec, work, PFFFT_FORWARD);
 
 	for (int k = 0; k < fft_size; ++k) {
 		const std::complex<float> x_ref(ref_spec[2 * k],
 		                                 ref_spec[2 * k + 1]);
 		const std::complex<float> x_tgt(tgt_spec[2 * k],
 		                                 tgt_spec[2 * k + 1]);
-		const std::complex<float> x_cross = x_ref * std::conj(x_tgt);
+		const std::complex<float> x_cross = x_tgt * std::conj(x_ref);
 
 		const float mag = std::abs(x_cross);
 		std::complex<float> x_ph(0.0f, 0.0f);
@@ -99,7 +99,7 @@ gcc_phat_result_t estimate_offset(const float *ref, const float *target,
 		cross_ph[2 * k + 1] = x_ph.imag();
 	}
 
-	pffft_transform(setup, cross_ph, gcc, work, PFFFT_BACKWARD);
+	pffft_transform_ordered(setup, cross_ph, gcc, work, PFFFT_BACKWARD);
 
 	const float norm = 1.0f / static_cast<float>(fft_size);
 	for (size_t i = 0; i < 2 * complex_count; ++i) {
