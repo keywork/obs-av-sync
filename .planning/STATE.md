@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Cameras stay in sync with the house audio automatically, every show, without the operator touching anything.
-**Current focus:** Phase 3 — RT-Thread Safety & Ring Hardening
+**Current focus:** Phase 5 — Reference Tap & Source Configuration
 
 ## Status
 
 **Milestone:** 1 — Hands-Off AV Sync
-**Phase:** 3 of 8 (RT-Thread Safety & Ring Hardening)
-**Last updated:** 2026-05-03 after code review fixes (Phase 3 fully complete)
+**Phase:** 5 of 8 (Reference Tap & Source Configuration)
+**Last updated:** 2026-05-03 after Phase 4 completion
 
 ## Phase Completion
 
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 | 1 | Plugin Foundation | ✓ Complete |
 | 2 | Ring Buffer | ✓ Complete |
 | 3 | RT-Thread Safety & Ring Hardening | ✓ Complete |
-| 4 | GCC-PHAT Offset Engine | ⬜ Not started |
+| 4 | GCC-PHAT Offset Engine | ✓ Complete |
 | 5 | Reference Tap & Source Configuration | ⬜ Not started |
 | 6 | Continuous Sync Engine | ⬜ Not started |
 | 7 | ONVIF Drift Evaluation | ⬜ Not started |
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Open Items
 
-- Phase 4 Plan 1: Vendor PFFFT — add as FetchContent or git submodule
+- Phase 5 Plan 1: Design reference tap architecture — audio capture callback vs filter approach
 
 ## Phase 3 Post-Execution Notes
 
