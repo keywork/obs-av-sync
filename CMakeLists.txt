@@ -11,10 +11,37 @@ include(compilerconfig)
 include(defaults)
 include(helpers)
 
+include(FetchContent)
+
+# PFFFT — BSD-like licence, compatible with GPL-2.0-or-later
+# Version pin: commit 08f5ed2618ac06d7dcc83d209d7253dc215274d5 (hayguen fork)
+# Fallback for offline builds: set FETCHCONTENT_SOURCE_DIR_PFFFT to a local clone
+FetchContent_Declare(pffft
+    GIT_REPOSITORY https://github.com/hayguen/pffft.git
+    GIT_TAG        08f5ed2618ac06d7dcc83d209d7253dc215274d5
+)
+# PFFFT uses cmake_minimum_required(VERSION 2.8); CMake 4.0+ rejects < 3.5.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
+FetchContent_GetProperties(pffft)
+if(NOT pffft_POPULATED)
+  cmake_policy(SET CMP0169 OLD)
+  FetchContent_Populate(pffft)
+  cmake_policy(SET CMP0169 NEW)
+  add_subdirectory(${pffft_SOURCE_DIR} ${pffft_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+
+# PFFFT has benign warnings on MSVC; our project uses /WX, so suppress them
+# for the vendored library to avoid build breakage.
+if(MSVC)
+  target_compile_options(PFFFT PRIVATE /wd4005 /wd4244 /wd4267 /wd4305 /wd4334 /wd4146 /wd4018)
+endif()
+
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
 find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE PFFFT)
 
 if(ENABLE_FRONTEND_API)
   find_package(obs-frontend-api REQUIRED)
