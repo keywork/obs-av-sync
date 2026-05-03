@@ -151,6 +151,13 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 	}
 
 	if (ts - data->window_start_ns >= AV_SYNC_DIAG_LOG_INTERVAL_NS) {
+		if (data->oversize_skips > 0) {
+			obs_source_t *parent_warn = data->source ? obs_filter_get_parent(data->source) : NULL;
+			const char *warn_name = parent_warn ? obs_source_get_name(parent_warn) : "(unknown)";
+			obs_log(LOG_WARNING,
+				"oversize chunk skips=%" PRIu64 " on '%s' (downmix capacity=%zu); data lost",
+				data->oversize_skips, warn_name, data->downmix_capacity);
+		}
 		const uint64_t elapsed_ns = ts - data->first_timestamp_ns;
 		const double elapsed_s = (double)elapsed_ns / 1.0e9;
 		const double eff_rate = elapsed_s > 0.0 ? (double)data->total_frames / elapsed_s : 0.0;
