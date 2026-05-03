@@ -17,6 +17,12 @@ target_include_directories(test_ring_spsc PRIVATE
 set_property(TARGET test_ring_spsc PROPERTY C_STANDARD 11)
 set_property(TARGET test_ring_spsc PROPERTY C_STANDARD_REQUIRED ON)
 
+# MSVC requires explicit C17 + /experimental:c11atomics for <stdatomic.h> support.
+if(MSVC)
+    set_property(TARGET test_ring_spsc PROPERTY C_STANDARD 17)
+    target_compile_options(test_ring_spsc PRIVATE /experimental:c11atomics)
+endif()
+
 # Link pthreads on POSIX platforms (not needed on Windows — test uses Win32 threads).
 if(NOT WIN32)
     find_package(Threads REQUIRED)
