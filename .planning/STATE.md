@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Milestone:** 1 — Hands-Off AV Sync
 **Phase:** 3 of 8 (RT-Thread Safety & Ring Hardening)
-**Last updated:** 2026-05-03 after initialization
+**Last updated:** 2026-05-03 after Plan 1 completion
 
 ## Phase Completion
 
@@ -19,7 +19,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 |-------|------|--------|
 | 1 | Plugin Foundation | ✓ Complete |
 | 2 | Ring Buffer | ✓ Complete |
-| 3 | RT-Thread Safety & Ring Hardening | ⬜ Not started |
+| 3 | RT-Thread Safety & Ring Hardening | 🔄 In progress (Plan 1/4 complete) |
 | 4 | GCC-PHAT Offset Engine | ⬜ Not started |
 | 5 | Reference Tap & Source Configuration | ⬜ Not started |
 | 6 | Continuous Sync Engine | ⬜ Not started |
@@ -28,4 +28,6 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Open Items
 
-(None yet)
+- Phase 3 Plan 2: SPSC atomic write cursor + `oldest_timestamp_ns`
+- Phase 3 Plan 3: `av_sync_ring_read` window-copy API with caller-owned cursor
+- Phase 3 Plan 4: Rate-limited oversize-chunk warning log + ring-buffer stress test
