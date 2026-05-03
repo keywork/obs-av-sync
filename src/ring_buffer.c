@@ -30,8 +30,8 @@ struct av_sync_ring {
 	uint32_t        sample_rate;
 
 	_Atomic size_t  total_written;        /* monotonically increasing write cursor */
-	uint64_t        newest_timestamp_ns;  /* timestamp of the last sample written  */
-	uint64_t        oldest_timestamp_ns;  /* timestamp of the oldest valid sample  */
+	_Atomic uint64_t newest_timestamp_ns; /* timestamp of the last sample written  */
+	_Atomic uint64_t oldest_timestamp_ns; /* timestamp of the oldest valid sample  */
 };
 
 av_sync_ring_t *av_sync_ring_create(size_t capacity_samples, uint32_t sample_rate)
@@ -79,23 +79,24 @@ void av_sync_ring_write(av_sync_ring_t *r, const float *samples, size_t n, uint6
 	}
 
 	/* Update newest_timestamp_ns: timestamp of the last sample in this chunk. */
-	r->newest_timestamp_ns = timestamp_ns +
-		(uint64_t)(((double)(n - 1) * 1.0e9) / (double)r->sample_rate);
+	atomic_store_explicit(&r->newest_timestamp_ns,
+	                      timestamp_ns + (uint64_t)(((double)(n - 1) * 1.0e9) / (double)r->sample_rate),
+	                      memory_order_relaxed);
 
 	/* Maintain oldest_timestamp_ns.
 	   While ring is filling (tw_after <= capacity): only the very first write sets oldest.
 	   Once ring is full (tw_after > capacity): every write updates oldest to track the rolling window. */
 	if (tw_after <= r->capacity) {
 		if (tw_before == 0) {
-			r->oldest_timestamp_ns = timestamp_ns;
+			atomic_store_explicit(&r->oldest_timestamp_ns, timestamp_ns, memory_order_relaxed);
 		}
 		/* else: ring still filling — oldest sample hasn't been overwritten, leave unchanged. */
 	} else {
 		/* Ring is full: oldest = newest minus the span of (capacity - 1) samples. */
 		uint64_t span_ns = (uint64_t)(((double)(r->capacity - 1) * 1.0e9) / (double)r->sample_rate);
-		r->oldest_timestamp_ns = (r->newest_timestamp_ns > span_ns)
-		                         ? r->newest_timestamp_ns - span_ns
-		                         : 0;
+		uint64_t newest  = atomic_load_explicit(&r->newest_timestamp_ns, memory_order_relaxed);
+		uint64_t oldest  = (newest > span_ns) ? newest - span_ns : 0;
+		atomic_store_explicit(&r->oldest_timestamp_ns, oldest, memory_order_relaxed);
 	}
 
 	/* Release store: all sample bytes written above are visible to any thread that
@@ -108,16 +109,16 @@ void av_sync_ring_get_stats(const av_sync_ring_t *r, av_sync_ring_stats_t *out)
 	if (!r || !out) {
 		return;
 	}
-	/* Stats path: relaxed load is acceptable — stats are informational, not used for
-	   ring-position decisions. The consumer's ring-read path uses acquire ordering. */
-	size_t tw = atomic_load_explicit(&r->total_written, memory_order_relaxed);
+	/* Acquire load: pairs with the producer's release store on total_written,
+	   ensuring the timestamp stores are visible when this load observes the updated cursor. */
+	size_t tw = atomic_load_explicit(&r->total_written, memory_order_acquire);
 
 	out->capacity            = r->capacity;
 	out->total_written       = (uint64_t)tw;
 	out->filled              = (tw < r->capacity) ? tw : r->capacity;
 	out->sample_rate         = r->sample_rate;
-	out->newest_timestamp_ns = r->newest_timestamp_ns;
-	out->oldest_timestamp_ns = r->oldest_timestamp_ns;
+	out->newest_timestamp_ns = atomic_load_explicit(&r->newest_timestamp_ns, memory_order_relaxed);
+	out->oldest_timestamp_ns = atomic_load_explicit(&r->oldest_timestamp_ns, memory_order_relaxed);
 }
 
 void av_sync_ring_cursor_init(av_sync_ring_t *ring, av_sync_ring_cursor_t *cursor)
