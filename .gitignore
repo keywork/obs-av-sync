@@ -17,6 +17,7 @@
 !README.md
 !CLAUDE.md
 !/docs
+!/.planning
 
 # Exclude lock files
 *.lock.json
