@@ -50,3 +50,22 @@ if(MSVC)
 endif()
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+enable_testing()
+
+# ThreadSanitizer option — Linux/macOS only (MSVC has no TSan equivalent).
+option(ENABLE_TSAN "Enable ThreadSanitizer for testing (Linux/macOS only)" OFF)
+if(ENABLE_TSAN)
+  if(WIN32)
+    message(WARNING "ThreadSanitizer is not available on Windows; ENABLE_TSAN ignored.")
+  else()
+    include(CheckCCompilerFlag)
+    check_c_compiler_flag("-fsanitize=thread" COMPILER_SUPPORTS_TSAN)
+    if(NOT COMPILER_SUPPORTS_TSAN)
+      message(WARNING "Compiler does not support -fsanitize=thread; ENABLE_TSAN ignored.")
+    endif()
+  endif()
+endif()
+
+add_subdirectory(tests)
