@@ -68,17 +68,22 @@ int main(void)
 	g_ring = av_sync_ring_create(CAPACITY, SAMPLE_RATE);
 	assert(g_ring != NULL);
 
-	thread_t writer = thread_create(writer_thread, NULL);
-
 	av_sync_ring_cursor_t cursor;
 	av_sync_ring_cursor_init(g_ring, &cursor);
+
+	thread_t writer = thread_create(writer_thread, NULL);
 
 	float out[CAPACITY];
 	size_t total_read = 0;
 	const size_t expected = (size_t)CHUNKS * CHUNK_SIZE;
+	size_t verify_pos = cursor.pos;
 
 	while (total_read < expected) {
 		size_t got = av_sync_ring_read(g_ring, &cursor, out, 960);
+		for (size_t i = 0; i < got; i++) {
+			assert(out[i] == (float)(verify_pos + i));
+		}
+		verify_pos += got;
 		total_read += got;
 		if (got == 0) {
 #ifdef _WIN32
@@ -93,11 +98,12 @@ int main(void)
 
 	av_sync_ring_stats_t stats;
 	av_sync_ring_get_stats(g_ring, &stats);
+	assert(cursor.pos == expected);
 	assert(stats.total_written == (uint64_t)expected);
 
 	av_sync_ring_destroy(g_ring);
 
-	printf("PASS: spsc_round_trip (%zu samples read, %" PRIu64 " written)\n",
-	       total_read, stats.total_written);
+	printf("PASS: spsc_round_trip (cursor.pos=%zu, %zu samples read, %" PRIu64 " written)\n",
+	       cursor.pos, total_read, stats.total_written);
 	return 0;
 }
