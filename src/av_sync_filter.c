@@ -20,12 +20,37 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <util/bmem.h>
 #include <plugin-support.h>
 
+#include <inttypes.h>
+
 #include "av_sync_filter.h"
+#include "ring_buffer.h"
 
 #define AV_SYNC_FILTER_ID "obs_av_sync_filter"
 
+/* Diagnostic logging throttle: log first N callbacks in detail, then roll up every INTERVAL. */
+#define AV_SYNC_DIAG_DETAILED_CALLBACKS 5
+#define AV_SYNC_DIAG_LOG_INTERVAL_NS 5000000000ULL /* 5 s */
+
+/* Ring capacity in seconds — enough to cover the longest analysis window plus headroom. */
+#define AV_SYNC_RING_SECONDS 10
+
 struct av_sync_filter_data {
 	obs_source_t *source;
+
+	/* Pass-through diagnostics (Phase 2a verification). */
+	uint64_t callback_count;
+	uint64_t total_frames;
+	uint64_t first_timestamp_ns;
+	uint64_t prev_timestamp_ns;
+	uint64_t window_start_ns;
+	uint64_t window_max_gap_ns;
+	uint32_t sample_rate;
+
+	/* Ring buffer (Phase 3): per-filter mono tap, allocated at filter create. */
+	av_sync_ring_t *ring;
+	float          *downmix_scratch;   /* heap-allocated downmix buffer, sized sample_rate * AV_SYNC_MAX_CHUNK_S */
+	size_t          downmix_capacity;  /* number of floats in downmix_scratch */
+	uint64_t        oversize_skips;    /* chunks skipped because they exceeded the downmix scratch */
 };
 
 static const char *av_sync_filter_get_name(void *type_data)
@@ -53,13 +78,91 @@ static void av_sync_filter_destroy(void *data_ptr)
 	obs_source_t *parent = data->source ? obs_filter_get_parent(data->source) : NULL;
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unknown)";
 	obs_log(LOG_INFO, "filter destroyed on '%s'", parent_name);
+	av_sync_ring_destroy(data->ring);
 	bfree(data);
 }
 
+/* Local downmix scratch size. OBS audio chunks are ~10 ms (~480 frames at 48 kHz).
+   2048 is ample headroom; larger chunks fall back to skipping the ring write for that callback. */
+#define AV_SYNC_DOWNMIX_SCRATCH 2048
+
 static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_audio_data *audio)
 {
-	UNUSED_PARAMETER(data_ptr);
-	/* Phase 2a: pass-through. Phase 2b will tap samples into a ring buffer here. */
+	struct av_sync_filter_data *data = data_ptr;
+
+	if (!audio || audio->frames == 0) {
+		return audio;
+	}
+
+	const uint64_t ts = audio->timestamp;
+	data->callback_count++;
+	data->total_frames += audio->frames;
+
+	if (data->callback_count == 1) {
+		struct obs_audio_info oai;
+		data->sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 0;
+		data->first_timestamp_ns = ts;
+		data->window_start_ns = ts;
+		if (data->sample_rate > 0) {
+			data->ring = av_sync_ring_create((size_t)data->sample_rate * AV_SYNC_RING_SECONDS,
+							 data->sample_rate);
+		}
+	} else {
+		const uint64_t gap = ts - data->prev_timestamp_ns;
+		if (gap > data->window_max_gap_ns) {
+			data->window_max_gap_ns = gap;
+		}
+	}
+	data->prev_timestamp_ns = ts;
+
+	/* Count active planes (each plane is one float32 channel). */
+	int planes = 0;
+	for (int i = 0; i < MAX_AV_PLANES && audio->data[i]; i++) {
+		planes++;
+	}
+
+	if (data->ring && planes > 0) {
+		if (audio->frames > AV_SYNC_DOWNMIX_SCRATCH) {
+			data->oversize_skips++;
+		} else {
+			float scratch[AV_SYNC_DOWNMIX_SCRATCH];
+			const float inv_planes = 1.0f / (float)planes;
+			const uint32_t frames = audio->frames;
+			for (uint32_t i = 0; i < frames; i++) {
+				float sum = 0.0f;
+				for (int p = 0; p < planes; p++) {
+					sum += ((const float *)audio->data[p])[i];
+				}
+				scratch[i] = sum * inv_planes;
+			}
+			av_sync_ring_write(data->ring, scratch, frames, ts);
+		}
+	}
+
+	if (data->callback_count <= AV_SYNC_DIAG_DETAILED_CALLBACKS) {
+		obs_log(LOG_INFO,
+			"passthrough cb #%" PRIu64 ": frames=%u ts=%" PRIu64 " rate=%u planes=%d",
+			data->callback_count, audio->frames, ts, data->sample_rate, planes);
+	}
+
+	if (ts - data->window_start_ns >= AV_SYNC_DIAG_LOG_INTERVAL_NS) {
+		const uint64_t elapsed_ns = ts - data->first_timestamp_ns;
+		const double elapsed_s = (double)elapsed_ns / 1.0e9;
+		const double eff_rate = elapsed_s > 0.0 ? (double)data->total_frames / elapsed_s : 0.0;
+		av_sync_ring_stats_t rs = {0};
+		av_sync_ring_get_stats(data->ring, &rs);
+		const double fill_pct = rs.capacity > 0 ? (100.0 * (double)rs.filled / (double)rs.capacity) : 0.0;
+		obs_log(LOG_INFO,
+			"passthrough rollup cb=%" PRIu64 " t=%.1fs frames=%" PRIu64
+			" eff=%.1fHz nominal=%u max_gap=%.2fms ring=%zu/%zu (%.0f%%) written=%" PRIu64
+			" skips=%" PRIu64,
+			data->callback_count, elapsed_s, data->total_frames, eff_rate,
+			data->sample_rate, (double)data->window_max_gap_ns / 1.0e6, rs.filled,
+			rs.capacity, fill_pct, rs.total_written, data->oversize_skips);
+		data->window_start_ns = ts;
+		data->window_max_gap_ns = 0;
+	}
+
 	return audio;
 }
 
