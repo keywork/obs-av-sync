@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Cameras stay in sync with the house audio automatically, every show, without the operator touching anything.
-**Current focus:** Phase 5 — Reference Tap & Source Configuration
+**Current focus:** Phase 6 — Continuous Sync Engine
 
 ## Status
 
 **Milestone:** 1 — Hands-Off AV Sync
-**Phase:** 5 of 8 (Reference Tap & Source Configuration)
-**Last updated:** 2026-05-03 after code review fixes (Phase 4 fully complete)
+**Phase:** 6 of 8 (Continuous Sync Engine)
+**Last updated:** 2026-05-03 after Phase 5 completion
 
 ## Phase Completion
 
@@ -28,9 +28,21 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Open Items
 
-- Phase 5 Plan 1 (05-01): Reference Tap — ✓ Complete
-- Phase 5 Plan 2 (05-02): Source Configuration UI — ✓ Complete
-- Phase 5 Plan 3 (05-03): Settings Persistence + Lifecycle Handling — ✓ Complete
+- Phase 6 Plan 1 (06-01): Continuous Sync Loop — Not started
+- Phase 6 Plan 2 (06-02): Hysteresis & Confidence Thresholds — Not started
+- Phase 6 Plan 3 (06-03): Smoothing / EMA Offset Application — Not started
+
+## Phase 5 Post-Execution Notes
+
+- Code review (`05-REVIEW.md`) found 6 issues (2 critical, 4 warnings).
+- All 6 issues fixed and verified.
+- Fix log: `.planning/phases/05-reference-tap-source-config/05-REVIEW-FIX.md`
+- 36/36 GCC-PHAT synthetic tests pass (< 1 ms accuracy, confidence > 1.0)
+- 1/1 SPSC ring round-trip test passes
+- Key design decisions from Phase 5:
+  1. Reference tap design: global singleton with mutex-protected shared ring
+  2. Per-filter properties: reference source dropdown + enable toggle
+  3. Settings persistence via `obs_data_t` (filter settings serialized in OBS scenes)
 
 ## Phase 4 Post-Execution Notes
 
