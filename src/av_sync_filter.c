@@ -110,14 +110,8 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 	data->total_frames += audio->frames;
 
 	if (data->callback_count == 1) {
-		struct obs_audio_info oai;
-		data->sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 0;
 		data->first_timestamp_ns = ts;
-		data->window_start_ns = ts;
-		if (data->sample_rate > 0) {
-			data->ring = av_sync_ring_create((size_t)data->sample_rate * AV_SYNC_RING_SECONDS,
-							 data->sample_rate);
-		}
+		data->window_start_ns    = ts;
 	} else {
 		const uint64_t gap = ts - data->prev_timestamp_ns;
 		if (gap > data->window_max_gap_ns) {
@@ -133,10 +127,10 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 	}
 
 	if (data->ring && planes > 0) {
-		if (audio->frames > AV_SYNC_DOWNMIX_SCRATCH) {
+		if (audio->frames > data->downmix_capacity) {
 			data->oversize_skips++;
 		} else {
-			float scratch[AV_SYNC_DOWNMIX_SCRATCH];
+			float *scratch = data->downmix_scratch;
 			const float inv_planes = 1.0f / (float)planes;
 			const uint32_t frames = audio->frames;
 			for (uint32_t i = 0; i < frames; i++) {
