@@ -34,6 +34,10 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 /* Ring capacity in seconds — enough to cover the longest analysis window plus headroom. */
 #define AV_SYNC_RING_SECONDS 10
 
+/* Maximum audio chunk size supported for downmix (1 second = 48000 samples at 48 kHz).
+   Heap-allocated at filter create. Chunks larger than this are skipped with a warning. */
+#define AV_SYNC_MAX_CHUNK_S 1
+
 struct av_sync_filter_data {
 	obs_source_t *source;
 
@@ -92,10 +96,6 @@ static void av_sync_filter_destroy(void *data_ptr)
 	bfree(data->downmix_scratch);
 	bfree(data);
 }
-
-/* Maximum audio chunk size supported for downmix (1 second = 48000 samples at 48 kHz).
-   Heap-allocated at filter create. Chunks larger than this are skipped with a warning. */
-#define AV_SYNC_MAX_CHUNK_S 1
 
 static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_audio_data *audio)
 {
