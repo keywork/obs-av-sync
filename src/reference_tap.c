@@ -78,6 +78,10 @@ bool reference_tap_init(void)
 
 void reference_tap_shutdown(void)
 {
+	/* Defensive: if init never ran, nothing to clean up. */
+	if (!ref_ring && !ref_downmix_scratch) {
+		return;
+	}
 	pthread_mutex_lock(&ref_mutex);
 
 	if (ref_source) {

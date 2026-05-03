@@ -21,7 +21,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 | 2 | Ring Buffer | ✓ Complete |
 | 3 | RT-Thread Safety & Ring Hardening | ✓ Complete |
 | 4 | GCC-PHAT Offset Engine | ✓ Complete |
-| 5 | Reference Tap & Source Configuration | 🔄 In Progress |
+| 5 | Reference Tap & Source Configuration | ✓ Complete |
 | 6 | Continuous Sync Engine | ⬜ Not started |
 | 7 | ONVIF Drift Evaluation | ⬜ Not started |
 | 8 | Dock UI | ⬜ Not started |
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 ## Open Items
 
 - Phase 5 Plan 1 (05-01): Reference Tap — ✓ Complete
-- Phase 5 Plan 2 (05-02): Source Configuration UI — ⬜ Not started
-- Phase 5 Plan 3 (05-03): Per-Filter Reference Selection — ⬜ Not started
+- Phase 5 Plan 2 (05-02): Source Configuration UI — ✓ Complete
+- Phase 5 Plan 3 (05-03): Settings Persistence + Lifecycle Handling — ✓ Complete
 
 ## Phase 4 Post-Execution Notes
 

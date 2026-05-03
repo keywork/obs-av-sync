@@ -92,19 +92,24 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 
 	obs_log(LOG_INFO, "filter created on '%s' rate=%u", parent_name, sample_rate);
 
-	const char *saved_ref = obs_data_get_string(settings, "reference_source_name");
-	if (saved_ref && saved_ref[0] != '\0') {
-		obs_source_t *ref = obs_get_source_by_name(saved_ref);
-		if (ref) {
-			reference_tap_set_source(saved_ref);
-			obs_source_release(ref);
-		} else {
-			obs_log(LOG_WARNING, "saved reference source '%s' not found at startup", saved_ref);
-		}
-	}
+	/* Register defaults so OBS knows initial values when no saved state exists. */
+	obs_data_set_default_string(settings, "reference_source_name", "");
+	obs_data_set_default_bool(settings, "sync_enabled", true);
 
 	/* Apply initial settings (reference source name, enable state). */
 	av_sync_filter_update(data, settings);
+
+	/* Startup validation: if a reference was saved but the source is gone, warn per-filter. */
+	if (data->reference_source_name && data->reference_source_name[0] != '\0') {
+		obs_source_t *ref = obs_get_source_by_name(data->reference_source_name);
+		if (!ref) {
+			obs_log(LOG_WARNING,
+			        "filter on '%s': saved reference source '%s' is missing; offset held",
+			        parent_name, data->reference_source_name);
+		} else {
+			obs_source_release(ref);
+		}
+	}
 
 	return data;
 }
@@ -114,7 +119,11 @@ static void av_sync_filter_destroy(void *data_ptr)
 	struct av_sync_filter_data *data = data_ptr;
 	obs_source_t *parent = data->source ? obs_filter_get_parent(data->source) : NULL;
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unknown)";
-	obs_log(LOG_INFO, "filter destroyed on '%s'", parent_name);
+	obs_log(LOG_INFO,
+	        "filter destroyed on '%s' ref='%s' enabled=%s",
+	        parent_name,
+	        data->reference_source_name ? data->reference_source_name : "(none)",
+	        data->sync_enabled ? "true" : "false");
 	av_sync_ring_destroy(data->ring);
 	bfree(data->downmix_scratch);
 	bfree(data->reference_source_name);
@@ -222,6 +231,7 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 		planes++;
 	}
 
+	/* Per D-05: ring writes continue regardless of sync_enabled so re-enable is instant. */
 	if (data->ring && planes > 0) {
 		if (audio->frames > data->downmix_capacity) {
 			data->oversize_skips++;
@@ -263,10 +273,11 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 		obs_log(LOG_INFO,
 			"passthrough rollup cb=%" PRIu64 " t=%.1fs frames=%" PRIu64
 			" eff=%.1fHz nominal=%u max_gap=%.2fms ring=%zu/%zu (%.0f%%) written=%" PRIu64
-			" skips=%" PRIu64,
+			" skips=%" PRIu64 " enabled=%s",
 			data->callback_count, elapsed_s, data->total_frames, eff_rate,
 			data->sample_rate, (double)data->window_max_gap_ns / 1.0e6, rs.filled,
-			rs.capacity, fill_pct, rs.total_written, data->oversize_skips);
+			rs.capacity, fill_pct, rs.total_written, data->oversize_skips,
+			data->sync_enabled ? "true" : "false");
 		data->oversize_skips = 0;
 		data->window_start_ns = ts;
 		data->window_max_gap_ns = 0;
