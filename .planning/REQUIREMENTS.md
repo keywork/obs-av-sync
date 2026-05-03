@@ -45,17 +45,17 @@
 
 | REQ-ID   | Phase | Status |
 |----------|-------|--------|
-| SYNC-01  | —     | —      |
-| SYNC-02  | —     | —      |
-| SYNC-03  | —     | —      |
-| SYNC-04  | —     | —      |
-| SYNC-05  | —     | —      |
-| REF-01   | —     | —      |
-| REF-02   | —     | —      |
-| REF-03   | —     | —      |
-| DRIFT-01 | —     | —      |
-| DRIFT-02 | —     | —      |
-| UI-01    | —     | —      |
-| UI-02    | —     | —      |
-| UI-03    | —     | —      |
-| UI-04    | —     | —      |
+| SYNC-01  | 4     | ⬜ Not started |
+| SYNC-02  | 6     | ⬜ Not started |
+| SYNC-03  | 6     | ⬜ Not started |
+| SYNC-04  | 3     | ⬜ Not started |
+| SYNC-05  | 4     | ⬜ Not started |
+| REF-01   | 5     | ⬜ Not started |
+| REF-02   | 5     | ⬜ Not started |
+| REF-03   | 5     | ⬜ Not started |
+| DRIFT-01 | 6     | ⬜ Not started |
+| DRIFT-02 | 7     | ⬜ Not started |
+| UI-01    | 8     | ⬜ Not started |
+| UI-02    | 8     | ⬜ Not started |
+| UI-03    | 8     | ⬜ Not started |
+| UI-04    | 8     | ⬜ Not started |
