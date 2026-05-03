@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Milestone:** 1 — Hands-Off AV Sync
 **Phase:** 5 of 8 (Reference Tap & Source Configuration)
-**Last updated:** 2026-05-03 after Phase 4 completion
+**Last updated:** 2026-05-03 after code review fixes (Phase 4 fully complete)
 
 ## Phase Completion
 
@@ -28,7 +28,16 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Open Items
 
-- Phase 5 Plan 1: Design reference tap architecture — audio capture callback vs filter approach
+- Phase 5 Plan 1: Reference Tap & Source Configuration
+
+## Phase 4 Post-Execution Notes
+
+- Code review found 2 minor issues (info level), both fixed.
+- Fix log: `.planning/phases/04-gcc-phat-offset-engine/04-REVIEW-FIX.md`
+- 36/36 synthetic tests pass (< 1 ms accuracy, confidence > 1.0)
+- Key bugs caught during testing:
+  1. `pffft_transform` → `pffft_transform_ordered` (frequency ordering)
+  2. Cross-spectrum sign: `x_tgt * conj(x_ref)` (positive delay convention)
 
 ## Phase 3 Post-Execution Notes
 
