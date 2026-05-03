@@ -46,6 +46,23 @@ typedef struct {
 
 void av_sync_ring_get_stats(const av_sync_ring_t *ring, av_sync_ring_stats_t *out);
 
+/* Consumer cursor — owned by the caller (analysis thread). Never touched by the producer. */
+typedef struct {
+	size_t pos; /* absolute sample index; matches total_written scale */
+} av_sync_ring_cursor_t;
+
+/* Set cursor to the oldest valid sample currently in the ring.
+   Safe to call from any thread while the audio thread writes. */
+void av_sync_ring_cursor_init(av_sync_ring_t *ring, av_sync_ring_cursor_t *cursor);
+
+/* Copy up to n samples into out[], advancing cursor->pos.
+   If the cursor has been lapped (samples overwritten since last read), advance it to
+   the current oldest valid sample before copying.
+   Returns the number of samples actually copied (may be < n if fewer are available).
+   Safe to call from any thread while the audio thread writes (SPSC: one consumer). */
+size_t av_sync_ring_read(av_sync_ring_t *ring, av_sync_ring_cursor_t *cursor,
+                          float *out, size_t n);
+
 #ifdef __cplusplus
 }
 #endif
