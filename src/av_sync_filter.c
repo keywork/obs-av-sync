@@ -113,9 +113,11 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 		data->first_timestamp_ns = ts;
 		data->window_start_ns    = ts;
 	} else {
-		const uint64_t gap = ts - data->prev_timestamp_ns;
-		if (gap > data->window_max_gap_ns) {
-			data->window_max_gap_ns = gap;
+		if (ts > data->prev_timestamp_ns) {
+			const uint64_t gap = ts - data->prev_timestamp_ns;
+			if (gap > data->window_max_gap_ns) {
+				data->window_max_gap_ns = gap;
+			}
 		}
 	}
 	data->prev_timestamp_ns = ts;
@@ -171,6 +173,7 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 			data->callback_count, elapsed_s, data->total_frames, eff_rate,
 			data->sample_rate, (double)data->window_max_gap_ns / 1.0e6, rs.filled,
 			rs.capacity, fill_pct, rs.total_written, data->oversize_skips);
+		data->oversize_skips = 0;
 		data->window_start_ns = ts;
 		data->window_max_gap_ns = 0;
 	}
