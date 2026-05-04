@@ -39,10 +39,10 @@ static void thread_join(thread_t t) { pthread_join(t, NULL); }
 #  define THREAD_FUNC_RETURN void *
 #endif
 
-#define CAPACITY    4800
-#define SAMPLE_RATE 48000
 #define CHUNKS      1000
 #define CHUNK_SIZE  480
+#define CAPACITY    (CHUNKS * CHUNK_SIZE)  /* ring sized to hold all data — pure round-trip, no lapping */
+#define SAMPLE_RATE 48000
 
 static av_sync_ring_t *g_ring;
 
@@ -73,7 +73,8 @@ int main(void)
 
 	thread_t writer = thread_create(writer_thread, NULL);
 
-	float out[CAPACITY];
+	float *out = (float *)calloc(CAPACITY, sizeof(float));
+	assert(out != NULL);
 	size_t total_read = 0;
 	const size_t expected = (size_t)CHUNKS * CHUNK_SIZE;
 	size_t verify_pos = cursor.pos;
@@ -102,6 +103,7 @@ int main(void)
 	assert(stats.total_written == (uint64_t)expected);
 
 	av_sync_ring_destroy(g_ring);
+	free(out);
 
 	printf("PASS: spsc_round_trip (cursor.pos=%zu, %zu samples read, %" PRIu64 " written)\n",
 	       cursor.pos, total_read, stats.total_written);

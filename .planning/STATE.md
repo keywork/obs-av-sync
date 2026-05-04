@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Cameras stay in sync with the house audio automatically, every show, without the operator touching anything.
-**Current focus:** Phase 7 complete — ready for Phase 8 (Dock UI)
+**Current focus:** Milestone 1 complete — all 8 phases finished. Ready for Milestone 2 planning or v1 release preparation.
 
 ## Status
 
 **Milestone:** 1 — Hands-Off AV Sync
-**Phase:** 7 of 8 (ONVIF Drift Evaluation)
-**Last updated:** 2026-05-04 after Phase 7 completion
+**Phase:** 8 of 8 (Dock UI) — ✓ Complete
+**Last updated:** 2026-05-04 after Phase 8 completion and final verification
 
 ## Phase Completion
 
@@ -24,11 +24,24 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 | 5 | Reference Tap & Source Configuration | ✓ Complete |
 | 6 | Continuous Sync Engine | ✓ Complete |
 | 7 | ONVIF Drift Evaluation | ✓ Complete |
-| 8 | Dock UI | ⬜ Not started |
+| 8 | Dock UI | ✓ Complete |
 
 ## Open Items
 
-- Phase 8: Dock UI — Not started
+- None — Milestone 1 is complete.
+
+## Phase 8 Post-Execution Notes
+
+- Code review (`08-REVIEW.md`) found 5 issues (1 critical, 2 warnings, 2 info).
+- 3 issues fixed and verified in commit `9ff8289` (CR-01, WR-01, WR-02).
+- 2 info items deferred to future milestones (IN-01 through IN-05 documented in review).
+- Fix log: `.planning/phases/08-dock-ui/08-REVIEW-FIX.md`
+- Qt6 dock with color-coded status table (Material Design palette), timer-based refresh at 2 Hz (500 ms interval)
+- Atomic filter fields (`_Atomic int status`, `_Atomic int sync_enabled`, `_Atomic double smoothed_offset_ms`, `_Atomic double last_confidence`) for thread-safe UI reads without locking
+- Timer-based refresh at 2 Hz gives smooth updates without hammering the UI thread
+- **Verification discovery:** SPSC round-trip test (`test_ring_spsc.c`) was failing due to a pre-existing test bug introduced in Phase 3 commit `7e90739`. The test verified every sample value but used a ring capacity of 4800 for 480,000 total samples, guaranteeing reader lapping on multi-core Windows. Fixed by sizing the ring to hold all data (`CAPACITY = CHUNKS * CHUNK_SIZE`) and allocating the read buffer on the heap to avoid stack overflow. Both tests now pass.
+- 36/36 GCC-PHAT synthetic tests pass (< 1 ms accuracy, confidence > 1.0)
+- 1/1 SPSC ring round-trip test passes (480,000 samples)
 
 ## Phase 7 Post-Execution Notes
 
