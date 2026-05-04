@@ -22,6 +22,19 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 extern "C" {
 #endif
 
+struct av_sync_filter_data;
+
+typedef void (*av_sync_instance_cb)(struct av_sync_filter_data *inst, void *userdata);
+
+void av_sync_filter_enum_instances(av_sync_instance_cb cb, void *userdata);
+
+const char *av_sync_filter_get_parent_name(struct av_sync_filter_data *data);
+int         av_sync_filter_get_status(struct av_sync_filter_data *data);
+bool        av_sync_filter_get_sync_enabled(struct av_sync_filter_data *data);
+float       av_sync_filter_get_smoothed_offset_ms(struct av_sync_filter_data *data);
+float       av_sync_filter_get_last_confidence(struct av_sync_filter_data *data);
+const char *av_sync_filter_get_reference_name(struct av_sync_filter_data *data);
+
 void av_sync_register_filter(void);
 
 #ifdef __cplusplus

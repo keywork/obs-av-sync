@@ -37,6 +37,14 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #define AV_SYNC_FILTER_ID "obs_av_sync_filter"
 
+struct av_sync_instance_node {
+	struct av_sync_filter_data *data;
+	struct av_sync_instance_node *next;
+};
+
+static pthread_mutex_t g_instance_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct av_sync_instance_node *g_instance_list = NULL;
+
 /* Diagnostic logging throttle: log first N callbacks in detail, then roll up every INTERVAL. */
 #define AV_SYNC_DIAG_DETAILED_CALLBACKS 5
 #define AV_SYNC_DIAG_LOG_INTERVAL_NS 5000000000ULL /* 5 s */
@@ -89,8 +97,8 @@ struct av_sync_filter_data {
 	av_sync_ring_cursor_t src_cursor;
 
 	/* Smoother state (single-writer: analysis thread). */
-	float smoothed_offset_ms;
-	float last_confidence;
+	_Atomic float smoothed_offset_ms;
+	_Atomic float last_confidence;
 	uint32_t valid_count;
 	bool has_valid_offset;
 
@@ -124,6 +132,15 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	}
 	data->source = source;
 
+	struct av_sync_instance_node *node = bzalloc(sizeof(*node));
+	if (node) {
+		node->data = data;
+		pthread_mutex_lock(&g_instance_mutex);
+		node->next = g_instance_list;
+		g_instance_list = node;
+		pthread_mutex_unlock(&g_instance_mutex);
+	}
+
 	obs_source_t *parent = obs_filter_get_parent(source);
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unattached)";
 
@@ -148,8 +165,8 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	   research doc's example and is intentional. */
 
 	atomic_store(&data->thread_running, false);
-	data->smoothed_offset_ms = 0.0f;
-	data->last_confidence = 0.0f;
+	atomic_store_explicit(&data->smoothed_offset_ms, 0.0f, memory_order_relaxed);
+	atomic_store_explicit(&data->last_confidence, 0.0f, memory_order_relaxed);
 	data->valid_count = 0;
 	data->has_valid_offset = false;
 	atomic_store(&data->status, 0);
@@ -213,6 +230,20 @@ static void av_sync_filter_destroy(void *data_ptr)
 	bfree(data->reference_source_name);
 	bfree(data->analysis_ref_buf);
 	bfree(data->analysis_src_buf);
+
+	pthread_mutex_lock(&g_instance_mutex);
+	struct av_sync_instance_node **pp = &g_instance_list;
+	while (*pp) {
+		if ((*pp)->data == data) {
+			struct av_sync_instance_node *to_free = *pp;
+			*pp = (*pp)->next;
+			bfree(to_free);
+			break;
+		}
+		pp = &(*pp)->next;
+	}
+	pthread_mutex_unlock(&g_instance_mutex);
+
 	bfree(data);
 }
 
@@ -478,12 +509,13 @@ static void *av_sync_analysis_thread(void *arg)
 		}
 
 		if (accepted) {
-			data->smoothed_offset_ms = smoother.smoothed_offset_ms;
+			atomic_store_explicit(&data->smoothed_offset_ms, smoother.smoothed_offset_ms, memory_order_relaxed);
 			data->valid_count = smoother.valid_count;
 			data->has_valid_offset = smoother.has_valid_offset;
 
 			if (atomic_load(&data->sync_enabled) && data->has_valid_offset) {
-				int64_t offset_ns = (int64_t)(data->smoothed_offset_ms * 1.0e6f);
+				float smoothed = atomic_load_explicit(&data->smoothed_offset_ms, memory_order_relaxed);
+				int64_t offset_ns = (int64_t)(smoothed * 1.0e6f);
 				obs_source_t *parent = obs_filter_get_parent(data->source);
 				if (parent) {
 					obs_source_set_sync_offset(parent, offset_ns);
@@ -501,17 +533,63 @@ static void *av_sync_analysis_thread(void *arg)
 					"raw=%.2f ms confidence=%.2f valid_count=%" PRIu32,
 					parent_name,
 					status_str,
-					data->smoothed_offset_ms,
+					atomic_load_explicit(&data->smoothed_offset_ms, memory_order_relaxed),
 					result.offset_ns / 1.0e6f,
 					result.confidence,
 					data->valid_count);
 				data->last_diag_ns = now_ns;
 			}
 		}
-		data->last_confidence = result.confidence;
+		atomic_store_explicit(&data->last_confidence, result.confidence, memory_order_relaxed);
 	}
 
 	return NULL;
+}
+
+void av_sync_filter_enum_instances(av_sync_instance_cb cb, void *userdata)
+{
+	pthread_mutex_lock(&g_instance_mutex);
+	for (struct av_sync_instance_node *n = g_instance_list; n; n = n->next) {
+		cb(n->data, userdata);
+	}
+	pthread_mutex_unlock(&g_instance_mutex);
+}
+
+const char *av_sync_filter_get_parent_name(struct av_sync_filter_data *data)
+{
+	if (!data || !data->source) return NULL;
+	obs_source_t *parent = obs_filter_get_parent(data->source);
+	return parent ? obs_source_get_name(parent) : NULL;
+}
+
+int av_sync_filter_get_status(struct av_sync_filter_data *data)
+{
+	if (!data) return 0;
+	return atomic_load_explicit(&data->status, memory_order_relaxed);
+}
+
+bool av_sync_filter_get_sync_enabled(struct av_sync_filter_data *data)
+{
+	if (!data) return false;
+	return atomic_load_explicit(&data->sync_enabled, memory_order_relaxed);
+}
+
+float av_sync_filter_get_smoothed_offset_ms(struct av_sync_filter_data *data)
+{
+	if (!data) return 0.0f;
+	return atomic_load_explicit(&data->smoothed_offset_ms, memory_order_relaxed);
+}
+
+float av_sync_filter_get_last_confidence(struct av_sync_filter_data *data)
+{
+	if (!data) return 0.0f;
+	return atomic_load_explicit(&data->last_confidence, memory_order_relaxed);
+}
+
+const char *av_sync_filter_get_reference_name(struct av_sync_filter_data *data)
+{
+	if (!data) return NULL;
+	return data->reference_source_name;
 }
 
 static struct obs_source_info av_sync_filter_info = {
