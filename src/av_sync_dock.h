@@ -16,33 +16,15 @@ You should have received a copy of the GNU General Public License along
 with this program. If not, see <https://www.gnu.org/licenses/>
 */
 
-#include <obs-module.h>
-#include <plugin-support.h>
+#pragma once
 
-#include "av_sync_filter.h"
-#include "reference_tap.h"
-#include "av_sync_dock.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
+bool av_sync_dock_create(void);
+void av_sync_dock_destroy(void);
 
-bool obs_module_load(void)
-{
-	av_sync_register_filter();
-	if (!reference_tap_init()) {
-		obs_log(LOG_ERROR, "reference tap init failed");
-		return false;
-	}
-	if (!av_sync_dock_create()) {
-		obs_log(LOG_WARNING, "failed to create AV Sync dock");
-	}
-	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
-	return true;
+#ifdef __cplusplus
 }
-
-void obs_module_unload(void)
-{
-	av_sync_dock_destroy();
-	reference_tap_shutdown();
-	obs_log(LOG_INFO, "plugin unloaded");
-}
+#endif
