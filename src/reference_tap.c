@@ -19,8 +19,8 @@ the Free Software Foundation; either version 2 of the License, or
 static pthread_mutex_t ref_mutex;
 static char            ref_name[256];
 static obs_source_t   *ref_source;
-static av_sync_ring_t *ref_ring;
-static uint32_t        ref_sample_rate;
+static _Atomic(av_sync_ring_t *) ref_ring;
+static _Atomic uint32_t ref_sample_rate;
 static float          *ref_downmix_scratch;
 static size_t          ref_downmix_capacity;
 static bool            ref_initialized;
@@ -59,7 +59,7 @@ static void reference_audio_callback(void *param, obs_source_t *source,
 		ref_downmix_scratch[i] = sum * inv_planes;
 	}
 
-	av_sync_ring_write(ref_ring, ref_downmix_scratch, audio->frames, audio->timestamp);
+	av_sync_ring_write(atomic_load(&ref_ring), ref_downmix_scratch, audio->frames, audio->timestamp);
 }
 
 bool reference_tap_init(void)
@@ -70,20 +70,22 @@ bool reference_tap_init(void)
 	ref_initialized = true;
 
 	struct obs_audio_info oai;
-	ref_sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
+	uint32_t sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
+	atomic_store(&ref_sample_rate, sample_rate);
 
-	ref_ring = av_sync_ring_create((size_t)ref_sample_rate * 10, ref_sample_rate);
-	ref_downmix_capacity = (size_t)ref_sample_rate;
+	av_sync_ring_t *ring = av_sync_ring_create((size_t)sample_rate * 10, sample_rate);
+	atomic_store(&ref_ring, ring);
+	ref_downmix_capacity = (size_t)sample_rate;
 	ref_downmix_scratch  = bzalloc(ref_downmix_capacity * sizeof(float));
 
-	if (!ref_ring || !ref_downmix_scratch) {
-		if (ref_ring) {
-			av_sync_ring_destroy(ref_ring);
-			ref_ring = NULL;
+	if (!ring || !ref_downmix_scratch) {
+		if (ring) {
+			av_sync_ring_destroy(ring);
+			ring = NULL;
 		}
+		atomic_store(&ref_ring, NULL);
 		bfree(ref_downmix_scratch);
 		ref_downmix_scratch = NULL;
-		pthread_mutex_unlock(&ref_mutex);
 		pthread_mutex_destroy(&ref_mutex);
 		ref_initialized = false;
 		return false;
@@ -103,7 +105,7 @@ void reference_tap_shutdown(void)
 	}
 	pthread_mutex_lock(&ref_mutex);
 
-	if (!ref_ring && !ref_downmix_scratch) {
+	if (!atomic_load(&ref_ring) && !ref_downmix_scratch) {
 		pthread_mutex_unlock(&ref_mutex);
 		return;
 	}
@@ -114,14 +116,15 @@ void reference_tap_shutdown(void)
 		ref_source = NULL;
 	}
 
-	av_sync_ring_destroy(ref_ring);
-	ref_ring = NULL;
+	av_sync_ring_destroy(atomic_load(&ref_ring));
+	atomic_store(&ref_ring, NULL);
 
 	bfree(ref_downmix_scratch);
 	ref_downmix_scratch = NULL;
 
 	pthread_mutex_unlock(&ref_mutex);
 	pthread_mutex_destroy(&ref_mutex);
+	atomic_store(&ref_sample_rate, 0);
 	ref_initialized = false;
 }
 
@@ -171,7 +174,7 @@ void reference_tap_set_source(const char *name, const char *requester)
 
 const av_sync_ring_t *reference_tap_get_ring(void)
 {
-	return ref_ring;
+	return atomic_load(&ref_ring);
 }
 
 uint64_t reference_tap_get_oversize_skips(void)
@@ -181,5 +184,5 @@ uint64_t reference_tap_get_oversize_skips(void)
 
 uint32_t reference_tap_get_sample_rate(void)
 {
-	return ref_sample_rate;
+	return atomic_load(&ref_sample_rate);
 }

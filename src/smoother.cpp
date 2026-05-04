@@ -30,6 +30,9 @@ bool smoother_process(av_sync_smoother_t *s, float raw_offset_ms, float confiden
 	if (!s) {
 		return false;
 	}
+	if (!isfinite(raw_offset_ms) || !isfinite(confidence)) {
+		return false;
+	}
 	s->last_raw_confidence = confidence;
 	if (confidence < s->confidence_threshold) {
 		return false;
@@ -64,7 +67,8 @@ int smoother_get_status(const av_sync_smoother_t *s)
 	if (s->valid_count < 3) {
 		return 0;
 	}
-	if (s->last_raw_confidence < s->confidence_threshold || fabsf(s->smoothed_offset_ms) > 500.0f) {
+	if (!isfinite(s->smoothed_offset_ms) || !isfinite(s->last_raw_confidence) ||
+	    s->last_raw_confidence < s->confidence_threshold || fabsf(s->smoothed_offset_ms) > 500.0f) {
 		return 2;
 	}
 	return 1;

@@ -72,7 +72,7 @@ struct av_sync_filter_data {
 
 	/* Per-filter configuration (Phase 5). */
 	char  *reference_source_name;   /* bstrdup'd name of the chosen reference source; NULL if none */
-	bool   sync_enabled;            /* true = analysis thread may apply offsets */
+	_Atomic bool sync_enabled;      /* true = analysis thread may apply offsets */
 
 	/* Ring buffer (Phase 3): per-filter mono tap, allocated at filter create. */
 	av_sync_ring_t *ring;
@@ -119,6 +119,9 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 {
 	UNUSED_PARAMETER(settings);
 	struct av_sync_filter_data *data = bzalloc(sizeof(*data));
+	if (!data) {
+		return NULL;
+	}
 	data->source = source;
 
 	obs_source_t *parent = obs_filter_get_parent(source);
@@ -128,10 +131,19 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	uint32_t sample_rate = obs_get_audio_info(&oai) ? oai.samples_per_sec : 48000;
 	data->sample_rate      = sample_rate;
 	data->reference_source_name = NULL;
-	data->sync_enabled = true;
+	atomic_store(&data->sync_enabled, true);
 	data->downmix_capacity = (size_t)sample_rate * AV_SYNC_MAX_CHUNK_S;
 	data->downmix_scratch  = bzalloc(data->downmix_capacity * sizeof(float));
-	data->ring             = av_sync_ring_create((size_t)sample_rate * AV_SYNC_RING_SECONDS, sample_rate);
+	if (!data->downmix_scratch) {
+		bfree(data);
+		return NULL;
+	}
+	data->ring = av_sync_ring_create((size_t)sample_rate * AV_SYNC_RING_SECONDS, sample_rate);
+	if (!data->ring) {
+		bfree(data->downmix_scratch);
+		bfree(data);
+		return NULL;
+	}
 	/* Note: capacity is computed first and then used in bzalloc — this is equivalent to the
 	   research doc's example and is intentional. */
 
@@ -143,7 +155,20 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	atomic_store(&data->status, 0);
 	data->analysis_window_samples = (size_t)sample_rate * 4;
 	data->analysis_ref_buf = bzalloc(data->analysis_window_samples * sizeof(float));
+	if (!data->analysis_ref_buf) {
+		av_sync_ring_destroy(data->ring);
+		bfree(data->downmix_scratch);
+		bfree(data);
+		return NULL;
+	}
 	data->analysis_src_buf = bzalloc(data->analysis_window_samples * sizeof(float));
+	if (!data->analysis_src_buf) {
+		bfree(data->analysis_ref_buf);
+		av_sync_ring_destroy(data->ring);
+		bfree(data->downmix_scratch);
+		bfree(data);
+		return NULL;
+	}
 	data->last_diag_ns = 0;
 	data->last_src_total_written = 0;
 
@@ -178,7 +203,7 @@ static void av_sync_filter_destroy(void *data_ptr)
 	        "filter destroyed on '%s' ref='%s' enabled=%s",
 	        parent_name,
 	        data->reference_source_name ? data->reference_source_name : "(none)",
-	        data->sync_enabled ? "true" : "false");
+		        atomic_load(&data->sync_enabled) ? "true" : "false");
 	if (atomic_load(&data->thread_running)) {
 		atomic_store(&data->thread_running, false);
 		pthread_join(data->analysis_thread, NULL);
@@ -237,7 +262,7 @@ static void av_sync_filter_update(void *data_ptr, obs_data_t *settings)
 	bool new_enabled = obs_data_get_bool(settings, "sync_enabled");
 
 	/* Update sync_enabled (always safe, no locking needed). */
-	data->sync_enabled = new_enabled;
+	atomic_store(&data->sync_enabled, new_enabled);
 
 	/* Update reference source if it changed. */
 	bool changed = false;
@@ -260,7 +285,7 @@ static void av_sync_filter_update(void *data_ptr, obs_data_t *settings)
 		reference_tap_set_source(data->reference_source_name, parent_name);
 		obs_log(LOG_INFO, "reference source changed to '%s' (enabled=%s)",
 		        data->reference_source_name ? data->reference_source_name : "(none)",
-		        data->sync_enabled ? "true" : "false");
+	        atomic_load(&data->sync_enabled) ? "true" : "false");
 	}
 }
 
@@ -341,7 +366,7 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 			data->callback_count, elapsed_s, data->total_frames, eff_rate,
 			data->sample_rate, (double)data->window_max_gap_ns / 1.0e6, rs.filled,
 			rs.capacity, fill_pct, rs.total_written, data->oversize_skips,
-			data->sync_enabled ? "true" : "false");
+			atomic_load(&data->sync_enabled) ? "true" : "false");
 		data->oversize_skips = 0;
 		data->window_start_ns = ts;
 		data->window_max_gap_ns = 0;
@@ -353,6 +378,12 @@ static struct obs_audio_data *av_sync_filter_audio(void *data_ptr, struct obs_au
 static void *av_sync_analysis_thread(void *arg)
 {
 	struct av_sync_filter_data *data = arg;
+
+	if (!data->ring || !data->analysis_ref_buf || !data->analysis_src_buf) {
+		obs_log(LOG_ERROR, "av-sync: filter '%s' missing ring or analysis buffers, thread exiting",
+		        obs_source_get_name(data->source));
+		return NULL;
+	}
 
 	av_sync_ring_cursor_init(data->ring, &data->src_cursor);
 	av_sync_ring_t *ref_ring = (av_sync_ring_t *)reference_tap_get_ring();
@@ -376,7 +407,7 @@ static void *av_sync_analysis_thread(void *arg)
 	while (atomic_load(&data->thread_running)) {
 		av_sync_sleep_ms(500);
 
-		if (!data->sync_enabled) {
+		if (!atomic_load(&data->sync_enabled)) {
 			continue;
 		}
 
@@ -451,7 +482,7 @@ static void *av_sync_analysis_thread(void *arg)
 			data->valid_count = smoother.valid_count;
 			data->has_valid_offset = smoother.has_valid_offset;
 
-			if (data->sync_enabled && data->has_valid_offset) {
+			if (atomic_load(&data->sync_enabled) && data->has_valid_offset) {
 				int64_t offset_ns = (int64_t)(data->smoothed_offset_ms * 1.0e6f);
 				obs_source_t *parent = obs_filter_get_parent(data->source);
 				if (parent) {
