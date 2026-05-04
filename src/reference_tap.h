@@ -38,6 +38,9 @@ const av_sync_ring_t *reference_tap_get_ring(void);
    callback since init. */
 uint64_t reference_tap_get_oversize_skips(void);
 
+/* Return the sample rate of the reference tap, or 0 if not initialized. */
+uint32_t reference_tap_get_sample_rate(void);
+
 #ifdef __cplusplus
 }
 #endif

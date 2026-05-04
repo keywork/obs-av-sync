@@ -178,3 +178,8 @@ uint64_t reference_tap_get_oversize_skips(void)
 {
 	return ref_oversize_skips;
 }
+
+uint32_t reference_tap_get_sample_rate(void)
+{
+	return ref_sample_rate;
+}
