@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Cameras stay in sync with the house audio automatically, every show, without the operator touching anything.
-**Current focus:** Phase 6 — Continuous Sync Engine
+**Current focus:** Phase 6 complete — ready for Phase 7 (ONVIF Drift Evaluation)
 
 ## Status
 
 **Milestone:** 1 — Hands-Off AV Sync
 **Phase:** 6 of 8 (Continuous Sync Engine)
-**Last updated:** 2026-05-03 after Phase 5 completion
+**Last updated:** 2026-05-04 after Phase 6 completion
 
 ## Phase Completion
 
@@ -22,15 +22,27 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 | 3 | RT-Thread Safety & Ring Hardening | ✓ Complete |
 | 4 | GCC-PHAT Offset Engine | ✓ Complete |
 | 5 | Reference Tap & Source Configuration | ✓ Complete |
-| 6 | Continuous Sync Engine | ⬜ Not started |
+| 6 | Continuous Sync Engine | ✓ Complete |
 | 7 | ONVIF Drift Evaluation | ⬜ Not started |
 | 8 | Dock UI | ⬜ Not started |
 
 ## Open Items
 
-- Phase 6 Plan 1 (06-01): Continuous Sync Loop — Not started
-- Phase 6 Plan 2 (06-02): Hysteresis & Confidence Thresholds — Not started
-- Phase 6 Plan 3 (06-03): Smoothing / EMA Offset Application — Not started
+- Phase 7 Plan 1 (07-01): ONVIF Drift Evaluation — Not started
+- Phase 7 Plan 2 (07-02): Drift Metrics & Logging — Not started
+
+## Phase 6 Post-Execution Notes
+
+- Code review (`06-REVIEW.md`) found 7 issues (2 critical, 5 warnings).
+- 6 issues fixed and verified in commit `322ad44`; 3 warnings deferred to Phase 7/8 (WR-02, WR-03, WR-05).
+- Fix log: `.planning/phases/06-continuous-sync-engine/06-REVIEW-FIX.md`
+- 36/36 GCC-PHAT synthetic tests pass (< 1 ms accuracy, confidence > 1.0)
+- 1/1 SPSC ring round-trip test passes (480,000 samples)
+- Key design decisions from Phase 6:
+  1. Per-filter analysis thread at 500 ms cadence
+  2. EMA smoother (alpha = 0.3) with confidence gating and slew-rate cap (±20 ms per update)
+  3. Drift tracking and stream restart detection via `total_written` monotonicity check
+  4. Atomic `sync_enabled` and atomic reference-tap globals for thread safety
 
 ## Phase 5 Post-Execution Notes
 
