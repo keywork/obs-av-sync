@@ -31,6 +31,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "av_sync_filter.h"
 #include "ring_buffer.h"
 #include "reference_tap.h"
+#include "smoother.h"
 #include "gcc_phat.h"
 
 #define AV_SYNC_FILTER_ID "obs_av_sync_filter"
@@ -347,12 +348,14 @@ static void *av_sync_analysis_thread(void *arg)
 {
 	struct av_sync_filter_data *data = arg;
 
-	/* Initialize cursors to oldest valid sample. */
 	av_sync_ring_cursor_init(data->ring, &data->src_cursor);
 	av_sync_ring_t *ref_ring = (av_sync_ring_t *)reference_tap_get_ring();
 	if (ref_ring) {
 		av_sync_ring_cursor_init(ref_ring, &data->ref_cursor);
 	}
+
+	av_sync_smoother_t smoother;
+	smoother_init(&smoother);
 
 	while (atomic_load(&data->thread_running)) {
 		av_sync_sleep_ms(500);
@@ -366,7 +369,6 @@ static void *av_sync_analysis_thread(void *arg)
 			continue;
 		}
 
-		/* If reference ring changed (source switched), re-init cursor. */
 		if (ref_ring_current != ref_ring) {
 			ref_ring = ref_ring_current;
 			av_sync_ring_cursor_init(ref_ring, &data->ref_cursor);
@@ -388,13 +390,23 @@ static void *av_sync_analysis_thread(void *arg)
 			n,
 			data->sample_rate);
 
-		obs_source_t *parent = data->source ? obs_filter_get_parent(data->source) : NULL;
-		const char *parent_name = parent ? obs_source_get_name(parent) : "(unknown)";
-		obs_log(LOG_INFO,
-			"analysis thread on '%s': raw_offset=%.2f ms confidence=%.2f",
-			parent_name,
-			result.offset_ns / 1.0e6f,
-			result.confidence);
+		bool accepted = smoother_process(&smoother,
+		                                 result.offset_ns / 1.0e6f,
+		                                 result.confidence);
+		if (accepted) {
+			data->smoothed_offset_ms = smoother.smoothed_offset_ms;
+			data->valid_count = smoother.valid_count;
+			data->has_valid_offset = smoother.has_valid_offset;
+
+			if (data->sync_enabled && data->has_valid_offset) {
+				int64_t offset_ns = (int64_t)(data->smoothed_offset_ms * 1.0e6f);
+				obs_source_t *parent = obs_filter_get_parent(data->source);
+				if (parent) {
+					obs_source_set_sync_offset(parent, offset_ns);
+				}
+			}
+		}
+		data->last_confidence = result.confidence;
 	}
 
 	return NULL;
