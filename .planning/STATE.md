@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Cameras stay in sync with the house audio automatically, every show, without the operator touching anything.
-**Current focus:** Phase 6 complete — ready for Phase 7 (ONVIF Drift Evaluation)
+**Current focus:** Phase 7 complete — ready for Phase 8 (Dock UI)
 
 ## Status
 
 **Milestone:** 1 — Hands-Off AV Sync
-**Phase:** 6 of 8 (Continuous Sync Engine)
-**Last updated:** 2026-05-04 after Phase 6 completion
+**Phase:** 7 of 8 (ONVIF Drift Evaluation)
+**Last updated:** 2026-05-04 after Phase 7 completion
 
 ## Phase Completion
 
@@ -23,13 +23,20 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 | 4 | GCC-PHAT Offset Engine | ✓ Complete |
 | 5 | Reference Tap & Source Configuration | ✓ Complete |
 | 6 | Continuous Sync Engine | ✓ Complete |
-| 7 | ONVIF Drift Evaluation | ⬜ Not started |
+| 7 | ONVIF Drift Evaluation | ✓ Complete |
 | 8 | Dock UI | ⬜ Not started |
 
 ## Open Items
 
-- Phase 7 Plan 1 (07-01): ONVIF Drift Evaluation — Not started
-- Phase 7 Plan 2 (07-02): Drift Metrics & Logging — Not started
+- Phase 8: Dock UI — Not started
+
+## Phase 7 Post-Execution Notes
+
+- Verdict: **Defer** ONVIF clock sync for v1
+- Research covered: ONVIF Device Management spec, NTP/PTP accuracy, SOAP RTT analysis, OBS timing APIs, client library survey, integration paths
+- Key finding: No ONVIF mechanism reliably achieves ≤ 5 ms on generic cameras
+- Recommendation document: `docs/ONVIF-EVAL.md` with 7 sections, ~3,725 words
+- Revisit conditions: OBS adds media timing APIs, camera fleet upgrades to PTP, or v2 needs silent-period drift tracking
 
 ## Phase 6 Post-Execution Notes
 
