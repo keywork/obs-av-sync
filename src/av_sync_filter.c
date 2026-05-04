@@ -132,15 +132,6 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 	}
 	data->source = source;
 
-	struct av_sync_instance_node *node = bzalloc(sizeof(*node));
-	if (node) {
-		node->data = data;
-		pthread_mutex_lock(&g_instance_mutex);
-		node->next = g_instance_list;
-		g_instance_list = node;
-		pthread_mutex_unlock(&g_instance_mutex);
-	}
-
 	obs_source_t *parent = obs_filter_get_parent(source);
 	const char *parent_name = parent ? obs_source_get_name(parent) : "(unattached)";
 
@@ -207,6 +198,15 @@ static void *av_sync_filter_create(obs_data_t *settings, obs_source_t *source)
 
 	/* Apply initial settings (reference source name, enable state). */
 	av_sync_filter_update(data, settings);
+
+	struct av_sync_instance_node *node = bzalloc(sizeof(*node));
+	if (node) {
+		node->data = data;
+		pthread_mutex_lock(&g_instance_mutex);
+		node->next = g_instance_list;
+		g_instance_list = node;
+		pthread_mutex_unlock(&g_instance_mutex);
+	}
 
 	return data;
 }
@@ -548,6 +548,8 @@ static void *av_sync_analysis_thread(void *arg)
 
 void av_sync_filter_enum_instances(av_sync_instance_cb cb, void *userdata)
 {
+	if (!cb)
+		return;
 	pthread_mutex_lock(&g_instance_mutex);
 	for (struct av_sync_instance_node *n = g_instance_list; n; n = n->next) {
 		cb(n->data, userdata);

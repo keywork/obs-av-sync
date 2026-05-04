@@ -197,9 +197,6 @@ extern "C" bool av_sync_dock_create(void)
 		return true;
 
 	g_dock = new AVSyncDock();
-	if (!g_dock)
-		return false;
-
 	obs_frontend_add_dock_by_id("obs-av-sync-dock",
 	    obs_module_text("AVSync.DockTitle"), g_dock);
 	return true;
